@@ -1,5 +1,5 @@
 from torch import nn
-from parameters import *
+from source.parameters import *
 
 
 class ConvBlock(nn.Module):
@@ -70,6 +70,7 @@ class AVENet(nn.Module):
         y = nn.PairwiseDistance(y_vision, y_audio)
         y = nn.Linear(1, 2)
         y = nn.Softmax(2)
+        return y
 
 
 class AVSepNet(nn.Module):
