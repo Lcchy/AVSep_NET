@@ -1,5 +1,6 @@
-# IDE specific
+# IDE & env specific
 .idea/
+env_win/
 
 # Created by https://www.gitignore.io/api/python,pycharm,virtualenv
 # Edit at https://www.gitignore.io/?templates=python,pycharm,virtualenv
