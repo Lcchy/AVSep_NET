@@ -1,34 +1,35 @@
 from torch import nn
 from torch import optim
+
 from source.parameters import *
 from source.model import *
 from source.preprocessing import *
 from torch.nn import functional as func
 
 
-def train(use_model, epochs, batch, data):
-    optimizer = optim.Adam(model.parameters(), lr=LEARNING_RATE)
+def train(use_model, epochs, batch, use_loader):
+    optimizer = optim.Adam(use_model.parameters(), lr=LEARNING_RATE)
     scheduler = optim.lr_scheduler.ExponentialLR(optimizer, SCHEDULER_RATE)
 
     for epoch in range(epochs):
 
-        for i in range(batch):
+        for i, data in enumerate(use_loader, 0):
 
             optimizer.zero_grad()
 
             x_audio, x_vision, labels = data
 
-            y = model(x_audio, x_vision)
+            y = use_model(x_audio, x_vision)
             loss = func.l1_loss(y, labels)
             loss.backward()
             optimizer.step()
 
-        torch.save(net.state_dict(), PATH_TO_CHECKPOINT)
+        torch.save(use_model.state_dict(), PATH_TO_MODEL)
         scheduler.step()
 
         torch.cuda.empty_cache()
 
-    torch.save(net.state_dict(), PATH_TO_MODEL)
+    torch.save(use_model.state_dict(), PATH_TO_MODEL)
 
     return
 
@@ -40,13 +41,12 @@ if __name__ == "__main__":
     #                   help='input batch size for training (default: 64)')
 
     model = AVENet()
-    training_data = TrainingData()
 
-    Net = DDSPNet().float()
-    Net = Net.to(DEVICE)
+    model = model.float()
+    model = model.to(DEVICE)
 
-    dataset = AVDataset()
-    dataloader = DataLoader(dataset, batch_size=BATCH_SIZE,
+    av_data = AVDataset(PATH_TO_DATASET)
+    loader = DataLoader(av_data, batch_size=BATCH_SIZE,
                             shuffle=SHUFFLE_DATALOADER)
 
-    train(model, EPOCHS, BATCH, dataloader)
+    train(model, EPOCHS, BATCH_SIZE, loader)
