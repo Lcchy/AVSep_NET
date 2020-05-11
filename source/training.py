@@ -13,10 +13,11 @@ def train(use_model, epochs, batch, use_loader):
 
     for epoch in range(epochs):
 
-        for i, data in enumerate(use_loader, 0):
+        for i, data in enumerate(use_loader):
 
             optimizer.zero_grad()
 
+            print(i, data)
             x_audio, x_vision, labels = data
 
             y = use_model(x_audio, x_vision)
