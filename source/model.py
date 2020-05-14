@@ -1,5 +1,5 @@
 from torch import nn
-from source.parameters import *
+from parameters import CONVNET_KERNEL, CONVNET_STRIDE, CONVNET_POOL_KERNEL, CONVNET_CHANNELS, CONVNET_CHANNELS, AVE_NET_EMBED_DIM, VISION_IN_DIM, AUDIO_IN_DIM
 
 
 class ConvBlock(nn.Module):

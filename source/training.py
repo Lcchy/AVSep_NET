@@ -1,10 +1,13 @@
+import torch
 from torch import nn
 from torch import optim
-
-from source.parameters import *
-from source.model import *
-from source.preprocessing import *
 from torch.nn import functional as func
+from torch.utils.data import DataLoader
+
+from parameters import DEVICE, LEARNING_RATE, SCHEDULER_RATE, PATH_TO_MODEL, EPOCHS, BATCH_SIZE, SHUFFLE_DATALOADER
+from model import AVENet
+from preprocessing import AVDataset
+
 
 
 def train(use_model, epochs, batch, use_loader):
@@ -46,7 +49,7 @@ if __name__ == "__main__":
     model = model.float()
     model = model.to(DEVICE)
 
-    av_data = AVDataset(PATH_TO_DATASET)
+    av_data = AVDataset()
     loader = DataLoader(av_data, batch_size=BATCH_SIZE,
                             shuffle=SHUFFLE_DATALOADER)
 
