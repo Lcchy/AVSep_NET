@@ -28,11 +28,12 @@ PATH = Path(os.path.dirname(os.path.realpath(__file__))) / ".."
 PATH_TO_MODEL = PATH / "model"
 PATH_TO_DATA = PATH / "dataset"
 PATH_TO_MEDIA = PATH_TO_DATA / "media"
+PATH_TO_CACHE = PATH_TO_DATA / "cache"
 PATH_TO_DATA_CSV = PATH_TO_DATA / "balanced_train_segments.csv"
 PATH_TO_VISUAL = PATH_TO_DATA / "media/visual"
 PATH_TO_AUDIO = PATH_TO_DATA / "media/audio"
 
 """EXECUTION PARAMETERS"""
 V_LENGTH, A_LENGTH = 1, 100
-DOWNLOAD_YT_MEDIA = True    # Only effective if OS is linux
-CACHE_DATA = True
+DOWNLOAD_YT_MEDIA = False    # Only effective if OS is linux
+CACHE_DATA = False

@@ -3,11 +3,14 @@ import os
 import subprocess
 import copy
 import shutil
+import numpy as np
 import datetime
+import scipy.io.wavfile
+from PIL import Image
 import torch
 from torch.utils.data import DataLoader, Dataset
 import pandas as pd
-from parameters import PATH_TO_DATA_CSV, PATH_TO_VISUAL, PATH_TO_AUDIO, PATH_TO_MEDIA, V_LENGTH, A_LENGTH, DOWNLOAD_YT_MEDIA
+from parameters import PATH_TO_DATA_CSV, PATH_TO_CACHE, PATH_TO_VISUAL, PATH_TO_AUDIO, PATH_TO_MEDIA, V_LENGTH, A_LENGTH, DOWNLOAD_YT_MEDIA, CACHE_DATA
 
 
 def custom_join(d, out="", leave_out=[]):
@@ -45,16 +48,20 @@ class AVDataset(Dataset):
             'a_length': 1,
             'v_length': 0,
             'a_codec': "copy",
+            'a_channels': 1,
+            'a_freq': 48000,
             'v_size': (640,480),
-            'v_framerate': "24/1",
+            'v_framerate': "25/1",
             'v_codec': "copy",
             'v_aspect': "4:3",
             'v_pixel': "+",
+            'cache_path': PATH_TO_CACHE,
             'media_path': PATH_TO_MEDIA,
             'v_path': PATH_TO_VISUAL,
             'a_path': PATH_TO_AUDIO,
         }
         if DOWNLOAD_YT_MEDIA and sys.platform == "linux": self.download_database()
+        if CACHE_DATA: self.cache_data()
 
     def __len__(self):
         return len(self.csv_data)
@@ -64,7 +71,7 @@ class AVDataset(Dataset):
 
 
     def download_database(self):
-        """Downoad entire Audio-Visual database to the format given in av_parameters"""
+        """Downoad entire Audio-Visual database from Youtube to the format given in av_parameters"""
         p = self.av_parameters
 
         # Purge the media directory if necessary
@@ -79,9 +86,31 @@ class AVDataset(Dataset):
             #load as torch tensor with right dims, save into dataset/cache
 
 
+    def cache_data(self):
+        """Store the downloaded media into torch tensor format in cache folder"""
+        p = self.av_parameters
+
+        for v_filename in os.listdir(p['v_path']):
+            v_file = Image.open(p['v_path'] / v_filename)
+            v_file = np.asarray(v_file)
+            v_tensor = torch.tensor(v_file)
+            torch.save(v_tensor, p['cache_path'] / (v_filename.split(".")[0] + "_visual"))
+
+        for a_filename in os.listdir(p['a_path']):
+            freq, a_file = scipy.io.wavfile.read(p['a_path'] / a_filename)
+            # assert freq == p['a_codec']
+            a_file = np.asarray(a_file)
+            a_tensor = torch.tensor(a_file)
+            # a_tensor = self.process_audio(a_tensor)
+            torch.save(a_tensor, p['cache_path'] / (a_filename.split(".")[0] + "_audio"))
+
+
+    # def process_audio(self, tensor):
+    #     torch.
+
     def yt_download(self, yt_id, pos, a_length, v_length):
         """Download the images and sound of a given youtube video using youtube-dl and ffmpeg by running a bash cmd
-            (It would be better to let ffmpeg seperate the audio and visual than running 2 cmds..)"""
+        Todo: use a single ffmpeg call with stream mapping."""
 
         a_cmd_str = self.form_command(yt_id, pos, a_length, leave_out="visual")
         v_cmd_str = self.form_command(yt_id, pos, v_length, leave_out="audio")
@@ -118,6 +147,7 @@ class AVDataset(Dataset):
                     'nb visual frames': "-frames:v 1" if length == 0 else "",
                     'framerate': "-r {}".format(p['v_framerate']) if length > 0 else "",
                     'image size': "-s {}x{}".format(p['v_size'][0], p['v_size'][1]),     #INPUT_DIM    
+                    # 'birate': '-b {}',
                     #'pixel format': "-pix_fmt {}".format(p['v_pixel']),
                     #'video codec': "-codec:v {}".format(p['v_codec']),
                     #'aspect': "-aspect {}".format(p['v_aspect']),
@@ -126,6 +156,9 @@ class AVDataset(Dataset):
                 'audio': {
                     #'audio codec': "-codec:a {}".format(p['a_codec']),
                     #'layout': 
+                    # 'birate': '-b {}',
+                    'frequency': "-ar {}".format(p['a_freq']),
+                    'channels': "-ac {}".format(p['a_channels']),
                     'output path': p['a_path'] / ("{}_{}".format(yt_id, pos) + ".wav"),
                 },
             },
@@ -137,7 +170,7 @@ class AVDataset(Dataset):
 
 #%% DEBUG CELL
 
-a = AVDataset()
+#a = AVDataset()
 #a.yt_download("--PJHxphWEs", 35, 1, 0)
 
 
