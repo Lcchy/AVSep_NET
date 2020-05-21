@@ -4,9 +4,9 @@ from torch import optim
 from torch.nn import functional as func
 from torch.utils.data import DataLoader
 
-from parameters import DEVICE, LEARNING_RATE, SCHEDULER_RATE, PATH_TO_MODEL, EPOCHS, BATCH_SIZE, SHUFFLE_DATALOADER
-from model import AVENet
-from preprocessing import AVDataset
+from source.parameters import DEVICE, LEARNING_RATE, SCHEDULER_RATE, PATH_TO_MODEL, EPOCHS, BATCH_SIZE, SHUFFLE_DATALOADER
+from source.model import AVENet
+from source.preprocessing import AVDataset
 
 
 

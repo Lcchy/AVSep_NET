@@ -10,7 +10,7 @@ from PIL import Image
 import torch
 from torch.utils.data import DataLoader, Dataset
 import pandas as pd
-from parameters import PATH_TO_DATA_CSV, PATH_TO_CACHE, PATH_TO_VISUAL, PATH_TO_AUDIO, PATH_TO_MEDIA, V_LENGTH, A_LENGTH, DOWNLOAD_YT_MEDIA, CACHE_DATA
+from source.parameters import PATH_TO_DATA_CSV, PATH_TO_CACHE, PATH_TO_VISUAL, PATH_TO_AUDIO, PATH_TO_MEDIA, V_LENGTH, A_LENGTH, DOWNLOAD_YT_MEDIA, CACHE_DATA
 
 
 def custom_join(d, out="", leave_out=[]):
@@ -66,8 +66,10 @@ class AVDataset(Dataset):
     def __len__(self):
         return len(self.csv_data)
 
-    def __getitem__(self, index):
-        return torch.load(index)
+    def __getitem__(self, index, format):
+        p = self.av_parameters
+        yt_id = self.csv_data.iloc[index, 0]
+        return torch.load(p['cache_path'] / (yt_id + "_{}_{}".format(yt_id, pos, )))
 
 
     def download_database(self):
@@ -98,15 +100,20 @@ class AVDataset(Dataset):
 
         for a_filename in os.listdir(p['a_path']):
             freq, a_file = scipy.io.wavfile.read(p['a_path'] / a_filename)
-            # assert freq == p['a_codec']
+            assert freq == p['a_codec']
             a_file = np.asarray(a_file)
             a_tensor = torch.tensor(a_file)
-            # a_tensor = self.process_audio(a_tensor)
+            a_tensor = self.process_audio(a_tensor)
             torch.save(a_tensor, p['cache_path'] / (a_filename.split(".")[0] + "_audio"))
 
 
-    # def process_audio(self, tensor):
-    #     torch.
+    def process_audio(self, tensor):
+        """Process audio before caching. STFT"""
+        p = self.av_parameters
+        spectrogram = torch.stft(tensor, 512, 480)
+        log_spectrogram = torch.log(spectrogram)
+        return log_spectrogram
+        
 
     def yt_download(self, yt_id, pos, a_length, v_length):
         """Download the images and sound of a given youtube video using youtube-dl and ffmpeg by running a bash cmd
