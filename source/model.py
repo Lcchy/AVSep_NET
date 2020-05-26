@@ -97,4 +97,4 @@ class AVSepNet(nn.Module):
         )
 
     def forward(self, x):
-        return 1
+        return 1    # TODO

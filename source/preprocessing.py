@@ -14,7 +14,10 @@ from torch.utils.data import DataLoader, Dataset
 import matplotlib.pyplot as plt
 import pandas as pd
 from parameters import PATH_TO_DATA_CSV, PATH_TO_CACHE, PATH_TO_VISUAL, PATH_TO_AUDIO, PATH_TO_MEDIA, \
-    V_LENGTH, A_LENGTH, DOWNLOAD_YT_MEDIA, CACHE_DATA, STFT_NORMALIZED, VERBOSE
+    V_LENGTH, A_LENGTH, STFT_NORMALIZED, VERBOSE
+from logger import Logger_custom
+
+LOGGER = Logger_custom("Global Logger")
 
 
 def custom_join(d, out="", leave_out=[]):
@@ -38,9 +41,9 @@ def install_yt_dl():
     cmd1 = "sudo curl -L https://yt-dl.org/downloads/latest/youtube-dl -o /usr/local/bin/youtube-dl"
     cmd2 = "sudo chmod a+rx /usr/local/bin/youtube-dl"
     cmd3 = "yes | sudo apt-get install ffmpeg"
-    subprocess.run(cmd1.split(" "), shell=True, stdout=subprocess.DEVNULL)
-    subprocess.run(cmd2.split(" "), shell=True, stdout=subprocess.DEVNULL)
-    subprocess.run(cmd3.split(" "), shell=True, stdout=subprocess.DEVNULL)
+    subprocess.run(cmd1.split(" "), shell=True)
+    subprocess.run(cmd2.split(" "), shell=True)
+    subprocess.run(cmd3.split(" "), shell=True)
 
 
 class AVDataset(Dataset):
@@ -63,8 +66,6 @@ class AVDataset(Dataset):
             'v_path': PATH_TO_VISUAL,
             'a_path': PATH_TO_AUDIO,
         }
-        if DOWNLOAD_YT_MEDIA and sys.platform == "linux": self.download_database()
-        if CACHE_DATA: self.cache_data()
         self.data_list = os.listdir(self.av_parameters['cache_path'])
 
     def __len__(self):
@@ -89,7 +90,7 @@ class AVDataset(Dataset):
         for index in range(len(self.csv_data)):
             # Progress bar
             progress = int(20 * (index + 1) / len(self.csv_data))
-            print("[" + "=" * progress + " " * (20 - progress) + "]", end="\033[K\r")
+            LOGGER.print_log("[" + "=" * progress + " " * (20 - progress) + "]", end="\033[K\r")
 
             # Actual download calls
             yt_id = self.csv_data.iloc[index, 0]
@@ -110,7 +111,7 @@ class AVDataset(Dataset):
         for (index, v_filename) in enumerate(v_file_list):
             # Progress bar
             progress = int(20 * (index + 1) / len(v_file_list))
-            print("[" + "=" * progress + " " * (20 - progress) + "]", end="\033[K\r")
+            LOGGER.print_log("[" + "=" * progress + " " * (20 - progress) + "]", end="\033[K\r")
             
             filename = v_filename.split(".")[0]
             match = int(filename[-1])            # Can't use .split("_") because it occurs in filename
@@ -135,8 +136,11 @@ class AVDataset(Dataset):
 
             match = torch.tensor(match)
 
-            if VERBOSE: print("Caching {} and {} into {} with dims: {} | {} | {}".format(a_filename, v_filename, filename, a_tensor.size(), v_tensor.size(), match.size()))
+            if VERBOSE: LOGGER.print_log("Caching {} and {} into {} with dims: {} | {} | {}".format(a_filename, v_filename, filename, a_tensor.size(), v_tensor.size(), match.size()), end="\033[K\n")
             torch.save((a_tensor, v_tensor, match), p['cache_path'] / (filename + ".pt"))
+
+        # Update data list
+        self.data_list = os.listdir(self.av_parameters['cache_path'])
 
 
     def process_audio(self, a_file):

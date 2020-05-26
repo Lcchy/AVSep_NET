@@ -1,6 +1,8 @@
 import os
 import torch
+import time
 from pathlib import Path
+
 
 """MODEL ARCHITECTURE"""
 AUDIO_IN_DIM = [1, 257, 200]        #width, height, depth
@@ -33,7 +35,7 @@ PATH_TO_CACHE = PATH_TO_DATA / "cache"
 PATH_TO_DATA_CSV = PATH_TO_DATA / "balanced_train_segments.csv"
 PATH_TO_VISUAL = PATH_TO_DATA / "media/visual"
 PATH_TO_AUDIO = PATH_TO_DATA / "media/audio"
-PATH_TO_LOG = PATH / "log"
+PATH_TO_LOG = str(PATH / "log/log_id_{}")
 
 """EXECUTION PARAMETERS"""
 VERBOSE = True
@@ -44,8 +46,11 @@ CACHE_DATA = False
 STFT_NORMALIZED = False
 SMALL_DATASET = True
 
-
 """LOCAL CHANGES"""
 if SMALL_DATASET: 
     PATH_TO_VISUAL = PATH_TO_MEDIA / "visual_small"
     PATH_TO_AUDIO = PATH_TO_MEDIA / "audio_small"
+
+"""TO BE SET BY __MAIN__ IN TRAINING"""
+SESSION_ID = None
+LOGGER = None
