@@ -4,8 +4,10 @@ env_wsl/
 .idea/
 env_win/
 .vs/
-dataset/media
-dataset/cache
+dataset/media/*
+dataset/cache/*
+dataset/training_set/*
+dataset/validation_set/*
 
 # Created by https://www.gitignore.io/api/python,pycharm,virtualenv
 # Edit at https://www.gitignore.io/?templates=python,pycharm,virtualenv

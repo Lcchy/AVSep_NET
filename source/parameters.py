@@ -4,6 +4,16 @@ import time
 from pathlib import Path
 
 
+"""EXECUTION PARAMETERS"""
+VERBOSE = True
+LOG = True
+DISPLAY = True
+DOWNLOAD_YT_MEDIA = False    # Only effective if OS is linux
+CACHE_DATA = False
+SPLIT_DATA = True
+SMALL_DATASET = True
+
+
 """MODEL ARCHITECTURE"""
 AUDIO_IN_DIM = [1, 257, 200]        #width, height, depth
 VISION_IN_DIM = [3, 480, 640]
@@ -12,6 +22,25 @@ CONVNET_CHANNELS = 64
 CONVNET_KERNEL = 3
 CONVNET_POOL_KERNEL = 2
 CONVNET_STRIDE = 2
+
+"""MEDIA DONWLOAD FORMAT"""
+A_LENGTH = 1
+V_LENGTH = 0
+A_CODEC = "copy"
+A_CHANNELS = 1
+A_FREQ = 48000
+V_SIZE = (640,480)
+V_FRAMERATE = "25/1"
+V_CODEC = "copy"
+V_ASPECT = "4:3"
+V_PIXEL = "+"
+
+"""DATA PROCESSING"""
+STFT_N = 512
+STFT_HOP = 240
+STFT_WINDOW = torch.hann_window(480)
+STFT_NORMALIZED = True
+SPLIT_RATIO = 0.8
 
 """LEARNING PARAMETERS"""
 EPOCHS = 2
@@ -36,15 +65,8 @@ PATH_TO_DATA_CSV = PATH_TO_DATA / "balanced_train_segments.csv"
 PATH_TO_VISUAL = PATH_TO_DATA / "media/visual"
 PATH_TO_AUDIO = PATH_TO_DATA / "media/audio"
 PATH_TO_LOG = str(PATH / "log/log_id_{}")
-
-"""EXECUTION PARAMETERS"""
-VERBOSE = True
-LOG = True
-V_LENGTH, A_LENGTH = 1, 100
-DOWNLOAD_YT_MEDIA = False    # Only effective if OS is linux
-CACHE_DATA = False
-STFT_NORMALIZED = False
-SMALL_DATASET = True
+PATH_TO_TRAINING = PATH_TO_DATA / "training_set"
+PATH_TO_VALIDATION = PATH_TO_DATA / "validation_set"
 
 """LOCAL CHANGES"""
 if SMALL_DATASET: 

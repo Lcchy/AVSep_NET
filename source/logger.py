@@ -1,5 +1,5 @@
 import logging
-from parameters import LOG
+from parameters import LOG, DISPLAY
 
 class Logger_custom():
     """Set-up a logger quickly. 
@@ -18,7 +18,8 @@ class Logger_custom():
         self.logger = logger
 
     def print_log(self, msg, end="\n", level=logging.INFO):
-        print(msg, end=end)
-        if LOG:
+        if DISPLAY and level != logging.ERROR:
+            print(msg, end=end)
+        if LOG and end[-1:] == "\n":    # Considered as one character
             # Using ANSI sequence to go up one line as logging automatically adds \n
-            self.logger.log(level, msg)     #TODO inline ANSI for non \n
+            self.logger.log(level, msg.replace("\n", ""))     #TODO inline ANSI for non \n
