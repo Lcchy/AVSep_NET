@@ -5,11 +5,11 @@ from pathlib import Path
 
 
 """EXECUTION PARAMETERS"""
-VERBOSE = True
+VERBOSE = False
 LOG = True
 DISPLAY = True
 DOWNLOAD_YT_MEDIA = False    # Only effective if OS is linux
-CACHE_DATA = False
+CACHE_DATA = True
 SPLIT_DATA = True
 SMALL_DATASET = True
 

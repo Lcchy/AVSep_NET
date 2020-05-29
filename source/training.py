@@ -23,12 +23,12 @@ def validate(model, dataloader_validation):
     val_loss_sum = 0
     for data in dataloader_training:
             time_ref = int(time.time())
-            x_audio, x_vision, label = data
-            if VERBOSE: print("Validation; time to load data: {}".format(int(time.time() - time_ref)))
+            x_audio, x_vision, label = [tensor.to(DEVICE) for tensor in data]
+            if VERBOSE: LOGGER.print_log("Validation; time to load data: {}".format(int(time.time() - time_ref)))
             y = model(x_audio, x_vision)
-            if VERBOSE: print("Validation; time to compute y: {}".format(int(time.time() - time_ref)))            
-            val_loss_sum += func.l1_loss(y, label)
-            if VERBOSE: print("Validation; time to compute loss: {}".format(int(time.time() - time_ref)))            
+            if VERBOSE: LOGGER.print_log("Validation; time to compute y: {}".format(int(time.time() - time_ref)))            
+            val_loss_sum += func.l1_loss(y, [label == i for i in range(2)])
+            if VERBOSE: LOGGER.print_log("Validation; time to compute loss: {}".format(int(time.time() - time_ref)))            
     val_loss = val_loss_sum / len(dataloader_validation)
     return val_loss
     
@@ -49,13 +49,15 @@ def train(model, epochs, batch, dataloader_training, dataloader_validation):
 
             optimizer.zero_grad()
 
-            x_audio, x_vision, label = data
+            x_audio, x_vision = [tensor.to(DEVICE) for tensor in data[:-1]]
+            print(data[2])
+            label = torch.tensor([data[2] == i for i in range(2)]).to(DEVICE)
             
             # Training
             y = model(x_audio, x_vision)
-            loss = 0 #func.l1_loss(y, label)
-            # loss.backward()
-            # optimizer.step()
+            loss = func.l1_loss(y, label)
+            loss.backward()
+            optimizer.step()
 
             # Progress bar display
             progress = int(20 * (i + 1) / nb_batch)
@@ -80,7 +82,7 @@ def train(model, epochs, batch, dataloader_training, dataloader_validation):
 
         # Save and clean up after epoch
         torch.save(model.state_dict(),\
-            PATH_TO_MODEL_INTER.format(epoch + 1, epochs, str(epoch_loss).replace(".", "p"), SESSION_ID))
+            str(PATH_TO_MODEL_INTER.format(epoch + 1, epochs, str(epoch_loss).replace(".", "p"), SESSION_ID)))
         scheduler.step()
         torch.cuda.empty_cache()
 
@@ -90,7 +92,7 @@ def train(model, epochs, batch, dataloader_training, dataloader_validation):
     LOGGER.print_log("Total Training Time: {} | Last Epoch Loss: {:.3e} | Validation Loss: {:.3e}".format(
         total_time, epoch_loss, validation_loss))
 
-    torch.save(model.state_dict(), PATH_TO_MODEL.format(str(epoch_loss).replace(".", "p"), SESSION_ID))
+    torch.save(model.state_dict(), str(PATH_TO_MODEL.format(str(epoch_loss).replace(".", "p"), SESSION_ID)))
 
     return
 
@@ -104,7 +106,7 @@ if __name__ == "__main__":
 
     # Logging init
     SESSION_ID = int(time.time())
-    LOGGER = Logger_custom("Global Logger", PATH_TO_LOG.format(SESSION_ID))
+    LOGGER = Logger_custom("Global Logger", str(PATH_TO_LOG.format(SESSION_ID)))
 
     # Data loading
     try:
@@ -131,8 +133,8 @@ if __name__ == "__main__":
     LOGGER.print_log("\nModel was loaded successfully. Working device : {}\n".format(DEVICE))
     
     try:
-        validate(model, dataloader_validation)
-        #train(model, EPOCHS, BATCH_SIZE, dataloader_training, dataloader_validation)
+        #validate(model, dataloader_validation)
+        train(model, EPOCHS, BATCH_SIZE, dataloader_training, dataloader_validation)
     except Exception as e:
         LOGGER.print_log("Error during training:\n" + traceback.format_exc(), level=logging.ERROR)
         raise

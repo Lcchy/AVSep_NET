@@ -26,14 +26,14 @@ class AVDataset(Dataset):
 
     def __init__(self, path):
         self.path = path
-        self.data_list = os.listdir(self.path)
+        self.data_list = os.listdir(str(self.path))
         
     def __len__(self):
         return len(self.data_list)
 
     def __getitem__(self, index):
         """Returns 3 tensors: audio, visual, match (bool_int)"""
-        return torch.load(self.path / self.data_list[index])
+        return torch.load(str(self.path / self.data_list[index]))
 
 
 ### Main functions used to download, process, cache and split the dataset; used in __main__ of training
@@ -41,14 +41,14 @@ class AVDataset(Dataset):
 def download_database():
     """Downoad entire Audio-Visual database by randomly sampling the Youtube videos to the format given in av_parameters.
     Middle sample is for positive label, random for negative."""
-    csv_data = pd.read_csv(PATH_TO_DATA_CSV, header=2, quotechar='"', skipinitialspace=True)
+    csv_data = pd.read_csv(str(PATH_TO_DATA_CSV, header=2, quotechar='"', skipinitialspace=True))
 
     # Purge the media directory if necessary
-    if len(os.listdir(PATH_TO_VISUAL)) + len(os.listdir(PATH_TO_AUDIO)) > 0:
-        shutil.rmtree(PATH_TO_VISUAL)
-        shutil.rmtree(PATH_TO_AUDIO)
-        os.mkdir(PATH_TO_VISUAL)
-        os.mkdir(PATH_TO_AUDIO)
+    if len(os.listdir(str(PATH_TO_VISUAL))) + len(os.listdir(str(PATH_TO_AUDIO))) > 0:
+        shutil.rmtree(str(PATH_TO_VISUAL))
+        shutil.rmtree(str(PATH_TO_AUDIO))
+        os.mkdir(str(PATH_TO_VISUAL))
+        os.mkdir(str(PATH_TO_AUDIO))
     for index in range(len(csv_data)):
         # Progress bar
         progress = int(20 * (index + 1) / len(csv_data))
@@ -66,7 +66,7 @@ def cache_data():
     """Process and store the downloaded media into torch tensor format in cache folder.
     Pair up visual and audio parts randomly to create false pairs.
     Assumes that the file lists in visual and audio correspond."""
-    v_file_list = os.listdir(PATH_TO_VISUAL)
+    v_file_list = os.listdir(str(PATH_TO_VISUAL))
     rand_permute = np.random.permutation(len(v_file_list))
 
     for (index, v_filename) in enumerate(v_file_list):
@@ -79,7 +79,7 @@ def cache_data():
         filename = v_filename.split(".")[0]
         match = int(filename[-1])            # Can't use .split("_") because it occurs in filename
 
-        v_file = Image.open(PATH_TO_VISUAL / v_filename)
+        v_file = Image.open(str(PATH_TO_VISUAL / v_filename))
         v_file = np.copy(v_file)
         v_tensor = torch.tensor(v_file)
         v_tensor = v_tensor.permute(2,0,1).float()  # Get the torch model input dims right
@@ -91,39 +91,40 @@ def cache_data():
         else:
             a_filename = filename + ".wav"
 
-        freq, a_file = scipy.io.wavfile.read(PATH_TO_AUDIO / a_filename)
+        freq, a_file = scipy.io.wavfile.read(str(PATH_TO_AUDIO / a_filename))
         assert freq == A_FREQ
         a_tensor = process_audio(a_file)
         a_tensor = torch.unsqueeze(a_tensor, 0).float()
         a_tensor = a_tensor.permute(0,2,1)
 
         match = torch.tensor(match)
+        print(match)
 
         if VERBOSE: LOGGER.print_log("Caching {} and {} into {} with dims: {} | {} | {}".format(
             a_filename, v_filename, filename, a_tensor.size(), v_tensor.size(), match.size()
         ), end="\033[K\n")
-        torch.save((a_tensor, v_tensor, match), PATH_TO_CACHE / (filename + ".pt"))
+        torch.save((a_tensor, v_tensor, match), str(PATH_TO_CACHE / (filename + ".pt")))
     LOGGER.print_log("Done caching!", end="\033[K\n")
         
 
 def split_data():
     """Split the chached dataset into training and validation sets.
     TODO: balanced test split"""
-    data_list = os.listdir(PATH_TO_CACHE)
+    data_list = os.listdir(str(PATH_TO_CACHE))
     data_nb = len(data_list)
     rand_permute = np.random.permutation(data_nb)
     data_training_id = rand_permute[:int(SPLIT_RATIO * data_nb)]
      
-    shutil.rmtree(PATH_TO_TRAINING)
-    shutil.rmtree(PATH_TO_VALIDATION)
-    os.mkdir(PATH_TO_TRAINING)
-    os.mkdir(PATH_TO_VALIDATION)
+    shutil.rmtree(str(PATH_TO_TRAINING))
+    shutil.rmtree(str(PATH_TO_VALIDATION))
+    os.mkdir(str(PATH_TO_TRAINING))
+    os.mkdir(str(PATH_TO_VALIDATION))
     
     for (id, file) in enumerate(data_list):
         if id in data_training_id:
-            shutil.copy(PATH_TO_CACHE / file, PATH_TO_TRAINING / file)
+            shutil.copy(str(PATH_TO_CACHE / file), str(PATH_TO_TRAINING / file))
         else:
-            shutil.copy(PATH_TO_CACHE / file, PATH_TO_VALIDATION / file)
+            shutil.copy(str(PATH_TO_CACHE / file), str(PATH_TO_VALIDATION / file))
 
 ### Secondary functions getting called from the above
 
@@ -132,7 +133,6 @@ def process_audio(a_file):
     """Process audio before caching. STFT"""
     a_array = np.copy(a_file)
     a_tensor = torch.tensor(a_array, dtype=torch.float64)
-    print(max(a_tensor))
     # Values from the paper are not opt, n_fft > win_length ??!
     spectrogram = torch.stft(a_tensor, STFT_N, STFT_HOP, STFT_WINDOW.size()[0], STFT_WINDOW,
             center=True, pad_mode='reflect', normalized=STFT_NORMALIZED, onesided=True)
@@ -185,7 +185,7 @@ def form_command(yt_id, pos, length, match, leave_out):
                 #'pixel format': "-pix_fmt {}".format(V_PIXEL),
                 #'video codec': "-codec:v {}".format(V_CODEC),
                 #'aspect': "-aspect {}".format(V_ASPECT),
-                'output path': PATH_TO_VISUAL / ("{}_{}".format(yt_id, match) + ".jpg" if length == 0 else ".mp4"),
+                'output path': str(PATH_TO_VISUAL / ("{}_{}".format(yt_id, match) + ".jpg" if length == 0 else ".mp4")),
             },
             'audio': {
                 #'audio codec': "-codec:a {}".format(A_CODEC),
@@ -193,7 +193,7 @@ def form_command(yt_id, pos, length, match, leave_out):
                 # 'birate': '-b {}',
                 'frequency': "-ar {}".format(A_FREQ),
                 'channels': "-ac {}".format(A_CHANNELS),
-                'output path': PATH_TO_AUDIO / ("{}_{}".format(yt_id, match) + ".wav"),
+                'output path': str(PATH_TO_AUDIO / ("{}_{}".format(yt_id, match) + ".wav")),
             },
         },
     }
