@@ -9,10 +9,20 @@ VERBOSE = False
 LOG = True
 DISPLAY = True
 DOWNLOAD_YT_MEDIA = False    # Only effective if OS is linux
-CACHE_DATA = True
-SPLIT_DATA = True
-SMALL_DATASET = True
+PREPARE_DATA = False
+SMALL_DATASET = False
 
+"""LEARNING PARAMETERS"""
+EPOCHS = 100
+LEARNING_RATE = 0.001
+BATCH_SIZE = 50
+SCHEDULER_RATE = 1
+SHUFFLE_DATALOADER = True
+
+"""DEVICE PARAMETERS"""
+GPU_ON = True
+CUDA_ON = torch.cuda.is_available()
+DEVICE = torch.device("cuda:0" if CUDA_ON and GPU_ON else "cpu")
 
 """MODEL ARCHITECTURE"""
 AUDIO_IN_DIM = [1, 257, 200]        #width, height, depth
@@ -40,19 +50,7 @@ STFT_N = 512
 STFT_HOP = 240
 STFT_WINDOW = torch.hann_window(480)
 STFT_NORMALIZED = True
-SPLIT_RATIO = 0.8
-
-"""LEARNING PARAMETERS"""
-EPOCHS = 2
-LEARNING_RATE = 0.001
-BATCH_SIZE = 2
-SCHEDULER_RATE = 1
-SHUFFLE_DATALOADER = True
-
-"""DEVICE PARAMETERS"""
-GPU_ON = True
-CUDA_ON = torch.cuda.is_available()
-DEVICE = torch.device("cuda:0" if CUDA_ON and GPU_ON else "cpu")
+SPLIT_RATIO = 0.95
 
 """PATHS"""
 PATH = Path(os.path.dirname(os.path.realpath(__file__))) / ".."
@@ -67,6 +65,7 @@ PATH_TO_AUDIO = PATH_TO_DATA / "media/audio"
 PATH_TO_LOG = str(PATH / "log/log_id_{}")
 PATH_TO_TRAINING = PATH_TO_DATA / "training_set"
 PATH_TO_VALIDATION = PATH_TO_DATA / "validation_set"
+PATH_TO_DATALIST = PATH_TO_DATA / "datalist.pt"
 
 """LOCAL CHANGES"""
 if SMALL_DATASET: 

@@ -9,6 +9,7 @@ import random
 import scipy.io.wavfile
 from PIL import Image
 import torch
+import torch.nn.functional as F
 import sys
 from torch.utils.data import DataLoader, Dataset
 import matplotlib.pyplot as plt
@@ -16,7 +17,7 @@ import pandas as pd
 from parameters import PATH_TO_DATA_CSV, PATH_TO_CACHE, PATH_TO_VISUAL, PATH_TO_AUDIO, PATH_TO_MEDIA, \
     VERBOSE, A_LENGTH, V_LENGTH, A_CODEC, A_CHANNELS, A_FREQ, V_SIZE, V_FRAMERATE, V_CODEC, V_ASPECT, \
     V_PIXEL, STFT_NORMALIZED, SPLIT_RATIO, PATH_TO_TRAINING, PATH_TO_VALIDATION, STFT_N, STFT_HOP,     \
-    STFT_WINDOW, STFT_NORMALIZED
+    STFT_WINDOW, STFT_NORMALIZED, PATH_TO_DATALIST
 from logger import Logger_custom
 
 LOGGER = Logger_custom("Global Logger")
@@ -24,19 +25,123 @@ LOGGER = Logger_custom("Global Logger")
 
 class AVDataset(Dataset):
 
-    def __init__(self, path):
+    def __init__(self, path, datalist):
+        self.data_list = datalist
         self.path = path
-        self.data_list = os.listdir(str(self.path))
         
     def __len__(self):
         return len(self.data_list)
 
     def __getitem__(self, index):
         """Returns 3 tensors: audio, visual, match (bool_int)"""
-        return torch.load(str(self.path / self.data_list[index]))
+        return self.preprocess_load(index)
 
 
 ### Main functions used to download, process, cache and split the dataset; used in __main__ of training
+
+
+    def preprocess_load(self, index):
+        """Process audio and visual into torch tensor for training."""
+        a_filename, v_filename, match = self.data_list[index]
+
+        # Load and preprocess audio
+        freq, a_file = scipy.io.wavfile.read(str(self.path / a_filename))
+        assert freq == A_FREQ
+        a_array = np.copy(a_file)
+        a_tensor = torch.tensor(a_array, dtype=torch.float64)
+        # Values from the paper are not opt, n_fft > win_length ??!
+        spectrogram = torch.stft(a_tensor, STFT_N, STFT_HOP, STFT_WINDOW.size()[0], STFT_WINDOW,
+                center=True, pad_mode='reflect', normalized=STFT_NORMALIZED, onesided=True)
+        log_spectrogram = torch.log(spectrogram[:,:200,0] ** 2 + 1)     # Format size and set +1 (see noise level) to eliminate log(0)
+        # normalize
+        a_tensor = torch.unsqueeze(log_spectrogram, 0).float()
+        a_tensor = a_tensor.permute(0,2,1)
+
+        # Load and preprocess visual
+        v_file = Image.open(str(self.path / v_filename))
+        v_file_np = np.copy(v_file)                # OVERHEAD
+        v_file.close()
+        v_tensor = torch.tensor(v_file_np)
+        v_tensor = v_tensor.permute(2,0,1).float()  # Get the torch model input dims right
+
+        match = torch.tensor([float(match==i) for i in range(2)])
+
+        return a_tensor, v_tensor, match
+
+
+def prepare_data():
+    """Load a correct datalist from the available files, creates matching 
+    and non-matching pairs and splits the dataset (by copying) into training
+    and validation. 
+    Returns the validation and training datalists."""
+    data_list = []
+    v_file_list = os.listdir(str(PATH_TO_VISUAL))
+    datalist_len = len(v_file_list)
+    rand_permute = np.random.permutation(len(v_file_list))
+    corrupted = 0
+
+    rand_permute = np.random.permutation(datalist_len)
+    data_training_id = rand_permute[:int(SPLIT_RATIO * datalist_len)]
+    
+    shutil.rmtree(str(PATH_TO_TRAINING))
+    shutil.rmtree(str(PATH_TO_VALIDATION))
+    os.mkdir(str(PATH_TO_TRAINING))
+    os.mkdir(str(PATH_TO_VALIDATION))
+    train_data_list, validate_data_list = [], []
+
+    for (index, v_filename) in enumerate(v_file_list):
+        if index % 100 == 0:
+            # Progress bar display
+            abs_progress = 100 * (index + 1) / datalist_len
+            progress = int(abs_progress / 5)
+            LOGGER.print_log("Preparing Data: [{}] {:.2f}%".format("=" * progress + " " * (20 - progress), abs_progress), end="\033[K\r")
+
+        filename = v_filename.split(".")[0]
+        match = int(filename[-1])            # Can't use .split("_") because it occurs in filename
+        if not match:
+            #select random audio to form negative pair by taking the yt_id of a random file
+            rand_index = rand_permute[index]
+            a_filename = v_file_list[rand_index].split(".")[0][:-2] + "_0.wav"
+        else:
+            a_filename = filename + ".wav"
+
+        # Check for file sanity
+        sane_flag = True
+        v_file = Image.open(str(PATH_TO_VISUAL / v_filename))    
+        v_file_np = np.copy(v_file)
+        v_file.close()
+        try:
+            a_size = os.stat(str(PATH_TO_AUDIO / a_filename))[6]
+        except FileNotFoundError:
+            sane_flag = False
+            a_size = 0
+        if a_size < 96078 or len(v_file_np.shape) < 3: sane_flag = False
+
+        if sane_flag:
+            # Insert pair into final datalist and move it to the train/validate folder (random split)
+            data_list.append((a_filename, v_filename, match))
+            if index in data_training_id:
+                dest_path = PATH_TO_TRAINING
+                train_data_list.append((a_filename, v_filename, match))
+            else:
+                dest_path = PATH_TO_VALIDATION
+                validate_data_list.append((a_filename, v_filename, match))
+            shutil.copy(str(PATH_TO_AUDIO / a_filename), str(dest_path / a_filename))
+            shutil.copy(str(PATH_TO_VISUAL / v_filename), str(dest_path / v_filename))
+
+        else:
+            corrupted += 1
+
+    # if spectrogram.size()[1] < 200:
+    #     pad_size = 200 - spectrogram.size()[1]
+    #     spectrogram = F.pad(spectrogram, pad=(0, 0, pad_size // 2, (pad_size + 1) // 2, 0, 0), mode='constant', value=0)
+    # Split the chached dataset into training and validation sets.
+    # TODO: balanced test split
+
+    torch.save([train_data_list, validate_data_list], str(PATH_TO_DATALIST))
+    LOGGER.print_log("Dataset prepared successfully! Skipped {} visual files because data was missing or corrupted".format(corrupted), end="\033[K\n")
+    return train_data_list, validate_data_list
+        
 
 def download_database():
     """Downoad entire Audio-Visual database by randomly sampling the Youtube videos to the format given in av_parameters.
@@ -62,83 +167,7 @@ def download_database():
         yt_download(yt_id, rand_pos, A_LENGTH, V_LENGTH, match=0)
 
 
-def cache_data():
-    """Process and store the downloaded media into torch tensor format in cache folder.
-    Pair up visual and audio parts randomly to create false pairs.
-    Assumes that the file lists in visual and audio correspond."""
-    v_file_list = os.listdir(str(PATH_TO_VISUAL))
-    rand_permute = np.random.permutation(len(v_file_list))
-
-    for (index, v_filename) in enumerate(v_file_list):
-        # Progress bar
-        float_progress = (index + 1) / len(v_file_list)
-        progress = int(20 * (index + 1) / len(v_file_list))
-        LOGGER.print_log("Caching the data: [{}] {:.2f}%".format(
-            "=" * progress + " " * (20 - progress), 100 * float_progress), end="\033[K\r")
-
-        filename = v_filename.split(".")[0]
-        match = int(filename[-1])            # Can't use .split("_") because it occurs in filename
-
-        v_file = Image.open(str(PATH_TO_VISUAL / v_filename))
-        v_file = np.copy(v_file)
-        v_tensor = torch.tensor(v_file)
-        v_tensor = v_tensor.permute(2,0,1).float()  # Get the torch model input dims right
-
-        if not match:
-            #select random audio to form negative pair by taking the yt_id of a random file
-            rand_index = rand_permute[index]
-            a_filename = v_file_list[rand_index].split(".")[0][:-2] + "_0.wav"
-        else:
-            a_filename = filename + ".wav"
-
-        freq, a_file = scipy.io.wavfile.read(str(PATH_TO_AUDIO / a_filename))
-        assert freq == A_FREQ
-        a_tensor = process_audio(a_file)
-        a_tensor = torch.unsqueeze(a_tensor, 0).float()
-        a_tensor = a_tensor.permute(0,2,1)
-
-        match = torch.tensor(match)
-        print(match)
-
-        if VERBOSE: LOGGER.print_log("Caching {} and {} into {} with dims: {} | {} | {}".format(
-            a_filename, v_filename, filename, a_tensor.size(), v_tensor.size(), match.size()
-        ), end="\033[K\n")
-        torch.save((a_tensor, v_tensor, match), str(PATH_TO_CACHE / (filename + ".pt")))
-    LOGGER.print_log("Done caching!", end="\033[K\n")
-        
-
-def split_data():
-    """Split the chached dataset into training and validation sets.
-    TODO: balanced test split"""
-    data_list = os.listdir(str(PATH_TO_CACHE))
-    data_nb = len(data_list)
-    rand_permute = np.random.permutation(data_nb)
-    data_training_id = rand_permute[:int(SPLIT_RATIO * data_nb)]
-     
-    shutil.rmtree(str(PATH_TO_TRAINING))
-    shutil.rmtree(str(PATH_TO_VALIDATION))
-    os.mkdir(str(PATH_TO_TRAINING))
-    os.mkdir(str(PATH_TO_VALIDATION))
-    
-    for (id, file) in enumerate(data_list):
-        if id in data_training_id:
-            shutil.copy(str(PATH_TO_CACHE / file), str(PATH_TO_TRAINING / file))
-        else:
-            shutil.copy(str(PATH_TO_CACHE / file), str(PATH_TO_VALIDATION / file))
-
 ### Secondary functions getting called from the above
-
-
-def process_audio(a_file):
-    """Process audio before caching. STFT"""
-    a_array = np.copy(a_file)
-    a_tensor = torch.tensor(a_array, dtype=torch.float64)
-    # Values from the paper are not opt, n_fft > win_length ??!
-    spectrogram = torch.stft(a_tensor, STFT_N, STFT_HOP, STFT_WINDOW.size()[0], STFT_WINDOW,
-            center=True, pad_mode='reflect', normalized=STFT_NORMALIZED, onesided=True)
-    log_spectrogram = torch.log(spectrogram[:,:200,0] ** 2 + 1)     # Format size and set +1 (see noise level) to eliminate log(0)
-    # normalize
-    return log_spectrogram
 
 
 def yt_download(yt_id, pos, a_length, v_length, match):

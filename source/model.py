@@ -2,7 +2,7 @@ from torch import nn
 import torch
 import sys
 from parameters import CONVNET_KERNEL, CONVNET_STRIDE, CONVNET_POOL_KERNEL, CONVNET_CHANNELS,\
-    CONVNET_CHANNELS, AVE_NET_EMBED_DIM, VISION_IN_DIM, AUDIO_IN_DIM
+    CONVNET_CHANNELS, AVE_NET_EMBED_DIM, VISION_IN_DIM, AUDIO_IN_DIM, BATCH_SIZE, DEVICE
 
 
 class ConvBlock(nn.Module):
@@ -61,7 +61,7 @@ class AVENet(nn.Module):
             nn.Linear(in_features=8*CONVNET_CHANNELS, out_features=AVE_NET_EMBED_DIM),
             nn.ReLU(inplace=True),
             nn.Linear(in_features=AVE_NET_EMBED_DIM, out_features=AVE_NET_EMBED_DIM),
-            nn.LayerNorm(normalized_shape=AVE_NET_EMBED_DIM)
+            nn.LayerNorm(normalized_shape=AVE_NET_EMBED_DIM, elementwise_affine=False)
         )
         self.topLinear = nn.Sequential(
             nn.Linear(in_features=1, out_features=2),
@@ -76,9 +76,10 @@ class AVENet(nn.Module):
         y_audio = self.audioConv(x_audio)
         y_audio = y_audio.permute(0,2,3,1)
         y_audio = self.linearNorm(y_audio)
-
-        y = torch.dist(y_vision, y_audio, p=1)
-        return self.topLinear(y.unsqueeze(dim=-1))     # -1 or 0 ?
+        y = torch.zeros((BATCH_SIZE, 1)).to(DEVICE)
+        for i in range(BATCH_SIZE):
+            y[i] = torch.dist(y_audio[i], y_vision[i])      #oh god : torch.nn.PairwiseDistance
+        return self.topLinear(y.unsqueeze(1))
 
 
 class AVSepNet(nn.Module):
