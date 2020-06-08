@@ -13,7 +13,7 @@ from torch.utils.data import DataLoader
 
 from parameters import DEVICE, LEARNING_RATE, SCHEDULER_RATE, PATH_TO_MODEL, EPOCHS, BATCH_SIZE, \
     SHUFFLE_DATALOADER, PATH_TO_MODEL_INTER, PATH_TO_LOG, DOWNLOAD_YT_MEDIA, PREPARE_DATA, VERBOSE,\
-    PATH_TO_TRAINING, PATH_TO_VALIDATION, PATH_TO_DATALIST
+    PATH_TO_TRAINING, PATH_TO_VALIDATION, PATH_TO_DATALIST, WEIGHT_DECAY
 import model
 import preprocessing
 from logger import Logger_custom
@@ -24,6 +24,7 @@ def validate(model, dataloader_validation):
     with torch.no_grad():
         nb_batch_val = len(dataloader_validation)
         val_loss_sum = 0
+        val_accuracy_sum = 0
         past_time = 0
         for (index, data) in enumerate(dataloader_validation):
 
@@ -40,19 +41,21 @@ def validate(model, dataloader_validation):
                 past_time = present_time
                 
             # Evaluation
-            x_audio, x_vision, label = [tensor.to(DEVICE) for tensor in data]
+            x_audio, x_vision, label, match = [tensor.to(DEVICE) for tensor in data]
             y = model(x_audio, x_vision)
-            val_loss_sum += float(F.binary_cross_entropy(y, label.unsqueeze(1)))        # FLOATTTTT
+            val_loss_sum += float(F.binary_cross_entropy(y, label.unsqueeze(1)))       # FLOATTTTT
+            val_accuracy_sum = float((torch.max(y.float(), dim=2)[1] == match.unsqueeze(1)).sum())
 
-    val_loss = val_loss_sum / nb_batch_val
-    return val_loss
+    val_loss = val_loss_sum / BATCH_SIZE
+    val_accuracy = val_accuracy_sum / BATCH_SIZE
+    return val_loss, val_accuracy
 
 
 def train(model, dataloader_training, dataloader_validation):
     """Main training routine"""
     # Init of local var for training
     # torch.cuda.empty_cache()
-    optimizer = optim.Adam(model.parameters(), lr=LEARNING_RATE)
+    optimizer = optim.Adam(model.parameters(), lr=LEARNING_RATE, weight_decay=WEIGHT_DECAY)
     scheduler = optim.lr_scheduler.ExponentialLR(optimizer, SCHEDULER_RATE)
     nb_batch = len(dataloader_training)
     start_time = time.time()
@@ -64,7 +67,7 @@ def train(model, dataloader_training, dataloader_validation):
         for i, data in enumerate(dataloader_training):
             optimizer.zero_grad()
             
-            x_audio, x_vision, label = [tensor.to(DEVICE) for tensor in data]
+            x_audio, x_vision, label = [tensor.to(DEVICE) for tensor in data[:-1]]
             
             # Training
             y = model(x_audio, x_vision)
@@ -85,38 +88,43 @@ def train(model, dataloader_training, dataloader_validation):
                     datetime.timedelta(seconds=int(present_epoch_time)),
                     i + 1,
                     nb_batch,
-                    loss,
+                    float(loss),
                     time_per_sample,
                     datetime.timedelta(seconds=int(
                         BATCH_SIZE * (nb_batch * (EPOCHS - epoch) - i - 1) * time_per_sample)
                         )
                 ), end="\033[K\r")
                 past_epoch_time = present_epoch_time
+                
 
             epoch_loss_sum += float(loss)
-            # del x_audio, x_vision, label, loss, y
-            # gc.collect()
+            break
 
         # Measure and display progress at end of epoch
         epoch_total_time = datetime.timedelta(seconds=int(time.time() - epoch_start_time))
         epoch_loss = epoch_loss_sum / nb_batch
-        validation_loss = validate(model, dataloader_validation)
-        LOGGER.print_log("Epoch {}/{} : Time {} Loss {:.3e} Validation loss {:.3e}".format(
-            epoch + 1, EPOCHS, epoch_total_time, epoch_loss, validation_loss), end="\033[K\n")
+        val_loss, val_accuracy = validate(model, dataloader_validation)
+        LOGGER.print_log("Epoch {}/{} : Time {} Epoch Train Loss {:.3f} Validation Loss {:.3f} Validation Accuracy {:.3f}".format(
+            epoch + 1, EPOCHS, epoch_total_time, epoch_loss, val_loss, val_accuracy), end="\033[K\n")
 
-        # Save and clean up after epoch
-        torch.save(model.state_dict(),\
-            str(PATH_TO_MODEL_INTER.format(epoch + 1, EPOCHS, str(epoch_loss).replace(".", "p")[:6], SESSION_ID)))
+        if epoch % 10 == 0:
+            # Save model for later inference or training
+            torch.save({
+                'epoch': epoch,
+                'model_state_dict': model.state_dict(),
+                'optimizer_state_dict': optimizer.state_dict(),
+                'loss': loss
+            }, str(PATH_TO_MODEL_INTER.format(epoch + 1, EPOCHS, SESSION_ID)))
+            
         scheduler.step()
-        torch.cuda.empty_cache()
 
     # Last info display
     total_time = datetime.timedelta(seconds=int(time.time() - start_time))
-    validation_loss = validate(model, dataloader_validation)
-    LOGGER.print_log("Total Training Time: {} | Last Epoch Loss: {:.3e} | Validation Loss: {:.3e}".format(
-        total_time, epoch_loss, validation_loss))
+    val_loss, val_accuracy = validate(model, dataloader_validation)
+    LOGGER.print_log("Total Training Time {} | Last Epoch Train Loss {:.3f} | Validation Loss {:.3f} | Validation Accuracy {:.3f}".format(
+        total_time, epoch_loss, val_loss, val_accuracy))
 
-    torch.save(model.state_dict(), str(PATH_TO_MODEL.format(str(epoch_loss).replace(".", "p")[:6], SESSION_ID)))
+    torch.save(model.state_dict(), str(PATH_TO_MODEL.format(SESSION_ID)))
 
     return
 

@@ -65,7 +65,7 @@ class AVENet(nn.Module):
         )
         self.topLinear = nn.Sequential(
             nn.Linear(in_features=1, out_features=2),
-            nn.Softmax(dim=0)
+            nn.Softmax(dim=2)                           # yes
         )
 
     def forward(self, x_audio, x_vision):

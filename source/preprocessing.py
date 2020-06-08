@@ -64,9 +64,9 @@ class AVDataset(Dataset):
         v_tensor = torch.tensor(v_file_np)
         v_tensor = v_tensor.permute(2,0,1).float()  # Get the torch model input dims right
 
-        match = torch.tensor([float(match==i) for i in range(2)])
+        label = torch.tensor([float(match==i) for i in range(2)])
 
-        return a_tensor, v_tensor, match
+        return a_tensor, v_tensor, label, torch.tensor(match)         # To resolve
 
 
 def prepare_data():
