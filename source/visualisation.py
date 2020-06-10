@@ -2,8 +2,20 @@ import matplotlib.pyplot as plt
 import os
 import shutil
 import glob
+import time
+import torch
+import numpy as np
 
 from parameters import PATH_TO_LOG, PATH_TO_VIZ, EPOCHS, PATH_TO_ARCHIVE, PATH
+
+
+def graph_distrib(tensor_list):
+    np_array_list = []
+    for tensor in tensor_list:
+        np_array_list.append(torch.flatten(tensor).cpu().numpy())
+    plt.boxplot(np_array_list, notch=True)
+    plt.show()
+    plt.close()     
 
 
 def graph_session(session_id):
@@ -20,15 +32,14 @@ def graph_session(session_id):
             mean_epoch_train_loss.append(float(line.split("Epoch Train Loss ")[1][:5]))
             val_accuracy.append(float(line.split("Validation Accuracy ")[1][:5]))
 
-
     # Plotting
     fig, ax1 = plt.subplots()
-    ax1.plot(training_loss, 'tab:blue')
+    ax1.plot(training_loss[2:], 'tab:blue')
 
     ax2 = ax1.twiny()
-    ax2.plot(validation_loss, 'tab:red')
-    ax2.plot(mean_epoch_train_loss, 'tab:orange')
-    ax2.plot(val_accuracy, 'tab:green')
+    ax2.plot(mean_epoch_train_loss, 'sandybrown')
+    ax2.plot(validation_loss, 'indianred')
+    ax2.plot(val_accuracy, 'mediumseagreen')
 
     plt.savefig(str(PATH_TO_VIZ / ("fig_session_id_{}.jpg".format(str(session_id)))), dpi=1000)
     plt.close()
@@ -50,5 +61,5 @@ def archive_session(session_id):
         os.rename(file, str(session_dir / os.path.basename(file)))
 
 
-# graph_session("1591590703")
-# archive_session("1591339410")
+graph_session("1591759898")
+# archive_session("1591759898")

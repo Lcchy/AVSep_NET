@@ -51,11 +51,11 @@ class AVENet(nn.Module):
 
         self.visionConv = nn.Sequential(
             ConvNet(input_channels=VISION_IN_DIM[0]),
-            nn.MaxPool2d(kernel_size=(30,40))
+            nn.MaxPool2d(kernel_size=(VISION_IN_DIM[1] // 16,VISION_IN_DIM[2] // 16))
         )
         self.audioConv = nn.Sequential(
             ConvNet(input_channels=AUDIO_IN_DIM[0]),
-            nn.MaxPool2d(kernel_size=(12, 16))
+            nn.MaxPool2d(kernel_size=(AUDIO_IN_DIM[2] // 16, AUDIO_IN_DIM[1] // 16))
         )
         self.linearNorm = nn.Sequential(
             nn.Linear(in_features=8*CONVNET_CHANNELS, out_features=AVE_NET_EMBED_DIM),

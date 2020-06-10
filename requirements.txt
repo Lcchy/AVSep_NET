@@ -1,7 +1,8 @@
 numpy
 scipy
-torch
 matplotlib
 pandas
 pathlib
 Pillow
+
+# torch

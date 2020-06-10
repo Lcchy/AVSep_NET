@@ -4,12 +4,16 @@ import subprocess
 import copy
 import shutil
 import numpy as np
+import glob
+import sklearn
 import datetime
 import random
+import json
 import scipy.io.wavfile
 from PIL import Image
 import torch
 import torch.nn.functional as F
+import torchvision.transforms as T
 import sys
 from torch.utils.data import DataLoader, Dataset
 import matplotlib.pyplot as plt
@@ -17,8 +21,9 @@ import pandas as pd
 from parameters import PATH_TO_DATA_CSV, PATH_TO_CACHE, PATH_TO_VISUAL, PATH_TO_AUDIO, PATH_TO_MEDIA, \
     VERBOSE, A_LENGTH, V_LENGTH, A_CODEC, A_CHANNELS, A_FREQ, V_SIZE, V_FRAMERATE, V_CODEC, V_ASPECT, \
     V_PIXEL, STFT_NORMALIZED, SPLIT_RATIO, PATH_TO_TRAINING, PATH_TO_VALIDATION, STFT_N, STFT_HOP,     \
-    STFT_WINDOW, STFT_NORMALIZED, PATH_TO_DATALIST
+    STFT_WINDOW, STFT_NORMALIZED, PATH_TO_DATALIST, V_SCALE_OUT, VISION_IN_DIM, PATH_TO_DATA
 from logger import Logger_custom
+import visualisation
 
 LOGGER = Logger_custom("Global Logger")
 
@@ -48,24 +53,29 @@ class AVDataset(Dataset):
         freq, a_file = scipy.io.wavfile.read(str(self.path / a_filename))
         assert freq == A_FREQ
         a_array = np.copy(a_file)
-        a_tensor = torch.tensor(a_array, dtype=torch.float64)
+        a_tensor = torch.tensor(a_array, dtype=torch.float64)      #sklearn.preprocessing.normalize(a_array, norm='max')
         # Values from the paper are not opt, n_fft > win_length ??!
         spectrogram = torch.stft(a_tensor, STFT_N, STFT_HOP, STFT_WINDOW.size()[0], STFT_WINDOW,
                 center=True, pad_mode='reflect', normalized=STFT_NORMALIZED, onesided=True)
         log_spectrogram = torch.log(spectrogram[:,:200,0] ** 2 + 1)     # Format size and set +1 (see noise level) to eliminate log(0)
-        # normalize
-        a_tensor = torch.unsqueeze(log_spectrogram, 0).float()
+        a_tensor = (log_spectrogram - torch.min(log_spectrogram))  \
+            / (torch.max(log_spectrogram) - torch.min(log_spectrogram) + 1) 
+        a_tensor = a_tensor.unsqueeze(0).float()
         a_tensor = a_tensor.permute(0,2,1)
 
         # Load and preprocess visual
         v_file = Image.open(str(self.path / v_filename))
-        v_file_np = np.copy(v_file)                # OVERHEAD
+        v_transforms = T.Compose([
+            T.Resize(V_SCALE_OUT),
+            T.RandomCrop(VISION_IN_DIM[1], VISION_IN_DIM[2]),
+            T.RandomHorizontalFlip(),
+            T.ColorJitter(),
+            T.ToTensor()                               # Does the scaling and dim reordering
+            ])
+        v_tensor = v_transforms(v_file)
         v_file.close()
-        v_tensor = torch.tensor(v_file_np)
-        v_tensor = v_tensor.permute(2,0,1).float()  # Get the torch model input dims right
 
         label = torch.tensor([float(match==i) for i in range(2)])
-
         return a_tensor, v_tensor, label, torch.tensor(match)         # To resolve
 
 
@@ -256,3 +266,19 @@ def install_yt_dl():
     subprocess.run(cmd1.split(" "), shell=True)
     subprocess.run(cmd2.split(" "), shell=True)
     subprocess.run(cmd3.split(" "), shell=True)
+
+
+def filter_database_csv():
+    """Render a filtered csv audioset database file trilogy.
+    primary_labels = [('Musical instrument', "/m/04szw"), ('Singing', "/m/015lz1"), ('Tools', "/m/07k1x")]
+    secondary_labels = ['Animal', 'Human voice', 'Vehicle', 'Engine']"""
+
+    nb_samples = 0
+    for filename in glob.glob(str(PATH_TO_DATA / "*_segments.csv")):
+        orig_file = open(filename)
+        filtered_file = open(str(PATH_TO_DATA / ("filtered_" + os.path.basename(filename))), "x")
+        for line in orig_file:
+            if  ("/m/04szw" in line) or ("/m/015lz1" in line) or ("/m/07k1x" in line) or ("#" in line):
+                filtered_file.write(line)
+                nb_samples += 1
+    print(nb_samples)

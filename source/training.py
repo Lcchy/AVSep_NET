@@ -13,7 +13,7 @@ from torch.utils.data import DataLoader
 
 from parameters import DEVICE, LEARNING_RATE, SCHEDULER_RATE, PATH_TO_MODEL, EPOCHS, BATCH_SIZE, \
     SHUFFLE_DATALOADER, PATH_TO_MODEL_INTER, PATH_TO_LOG, DOWNLOAD_YT_MEDIA, PREPARE_DATA, VERBOSE,\
-    PATH_TO_TRAINING, PATH_TO_VALIDATION, PATH_TO_DATALIST, WEIGHT_DECAY
+    PATH_TO_TRAINING, PATH_TO_VALIDATION, PATH_TO_DATALIST, WEIGHT_DECAY, PATH_TO_PARAMS
 import model
 import preprocessing
 from logger import Logger_custom
@@ -44,10 +44,10 @@ def validate(model, dataloader_validation):
             x_audio, x_vision, label, match = [tensor.to(DEVICE) for tensor in data]
             y = model(x_audio, x_vision)
             val_loss_sum += float(F.binary_cross_entropy(y, label.unsqueeze(1)))       # FLOATTTTT
-            val_accuracy_sum = float((torch.max(y.float(), dim=2)[1] == match.unsqueeze(1)).sum())
+            val_accuracy_sum += float((torch.max(y.float(), dim=2)[1] == match.unsqueeze(1)).sum())
 
-    val_loss = val_loss_sum / BATCH_SIZE
-    val_accuracy = val_accuracy_sum / BATCH_SIZE
+    val_loss = val_loss_sum / nb_batch_val
+    val_accuracy = val_accuracy_sum / (nb_batch_val * BATCH_SIZE)
     return val_loss, val_accuracy
 
 
@@ -98,7 +98,7 @@ def train(model, dataloader_training, dataloader_validation):
                 
 
             epoch_loss_sum += float(loss)
-            break
+            
 
         # Measure and display progress at end of epoch
         epoch_total_time = datetime.timedelta(seconds=int(time.time() - epoch_start_time))
@@ -135,6 +135,10 @@ if __name__ == "__main__":
     # Logging init
     SESSION_ID = int(time.time())
     LOGGER = Logger_custom("Global Logger", str(PATH_TO_LOG.format(SESSION_ID)))
+
+    # Log execution parameters
+    param_file = open(str(PATH_TO_PARAMS))
+    for line in param_file: LOGGER.print_log(line)
 
     # Data loading
     try:
